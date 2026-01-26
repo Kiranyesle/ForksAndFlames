@@ -1,4 +1,54 @@
+// Snack API utility functions
+async function fetchSnacks(companyId) {
+  const res = await fetch(`${API_BASE}/companies/${companyId}`);
+  const company = await res.json();
+  return company.snacks || [];
+}
+
+async function addSnackAPI(snack, companyId) {
+  // Attach company reference
+  const res = await fetch(`${API_BASE}/snacks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...snack, company: { id: companyId } })
+  });
+  return res.json();
+}
+
+async function updateSnackAPI(id, snack) {
+  const res = await fetch(`${API_BASE}/snacks/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snack)
+  });
+  return res.json();
+}
+
+async function deleteSnackAPI(id) {
+  await fetch(`${API_BASE}/snacks/${id}`, { method: 'DELETE' });
+}
 import { useState, useEffect } from 'react'
+
+// API utility functions
+const API_BASE = 'https://forkandflamesapi.onrender.com/api';
+
+async function fetchCompanies() {
+  const res = await fetch(`${API_BASE}/companies`);
+  return res.json();
+}
+
+async function addCompanyAPI(company) {
+  const res = await fetch(`${API_BASE}/companies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(company)
+  });
+  return res.json();
+}
+
+async function deleteCompanyAPI(id) {
+  await fetch(`${API_BASE}/companies/${id}`, { method: 'DELETE' });
+}
 import './styles.css'
 import AdminScreen from './components/AdminScreen'
 import UserScreen from './components/UserScreen'
@@ -17,86 +67,62 @@ function App() {
 
   // Load companies from localStorage on mount
   useEffect(() => {
-    // Clear old single-company snacks data (migration from old system)
-    localStorage.removeItem('snacks')
-
-    const savedCompanies = localStorage.getItem('companies')
-    if (savedCompanies) {
-      try {
-        setCompanies(JSON.parse(savedCompanies))
-      } catch (e) {
-        setCompanies([])
-      }
-    } else {
-      // Initialize with empty company structure
-      setCompanies([])
-    }
+    // Fetch companies from backend
+    fetchCompanies().then(setCompanies);
 
     // Check if admin is already logged in
-    const adminToken = localStorage.getItem('adminToken')
-    const savedAdminEmail = localStorage.getItem('adminEmail')
+    const adminToken = localStorage.getItem('adminToken');
+    const savedAdminEmail = localStorage.getItem('adminEmail');
     if (adminToken === 'true' && savedAdminEmail) {
-      setIsAdminLoggedIn(true)
-      setAdminEmail(savedAdminEmail)
+      setIsAdminLoggedIn(true);
+      setAdminEmail(savedAdminEmail);
     } else {
-      // Clear invalid tokens
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('adminEmail')
-      setIsAdminLoggedIn(false)
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminEmail');
+      setIsAdminLoggedIn(false);
     }
 
     // Check if user is logged into a company
-    const userCompanyId = localStorage.getItem('userCompanyId')
-    const userEmail = localStorage.getItem('userEmail')
+    const userCompanyId = localStorage.getItem('userCompanyId');
+    const userEmail = localStorage.getItem('userEmail');
     if (userCompanyId && userEmail) {
-      setIsUserLoggedIn(true)
-      setUserCompanyId(parseInt(userCompanyId))
+      setIsUserLoggedIn(true);
+      setUserCompanyId(parseInt(userCompanyId));
     } else {
-      // Clear invalid user login data
-      localStorage.removeItem('userCompanyId')
-      localStorage.removeItem('userEmail')
-      localStorage.removeItem('userCompanyName')
-      setIsUserLoggedIn(false)
+      localStorage.removeItem('userCompanyId');
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userCompanyName');
+      setIsUserLoggedIn(false);
     }
-  }, [])
+  }, []);
 
-  // Save companies to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('companies', JSON.stringify(companies))
-  }, [companies])
+  // Remove localStorage sync for companies
 
-  const addSnack = (snack) => {
-    setCompanies(companies.map(company => 
+  const addSnack = async (snack) => {
+    const newSnack = await addSnackAPI(snack, selectedCompanyId);
+    setCompanies(companies.map(company =>
       company.id === selectedCompanyId
-        ? {
-            ...company,
-            snacks: [
-              ...company.snacks,
-              {
-                id: Date.now(),
-                ...snack,
-                stock: parseInt(snack.stock) || 0
-              }
-            ]
-          }
+        ? { ...company, snacks: [...company.snacks, newSnack] }
         : company
-    ))
+    ));
   }
 
-  const updateSnack = (id, updatedSnack) => {
+  const updateSnack = async (id, updatedSnack) => {
+    const updated = await updateSnackAPI(id, updatedSnack);
     setCompanies(companies.map(company =>
       company.id === selectedCompanyId
         ? {
             ...company,
             snacks: company.snacks.map(snack =>
-              snack.id === id ? { ...snack, ...updatedSnack } : snack
+              snack.id === id ? updated : snack
             )
           }
         : company
-    ))
+    ));
   }
 
-  const deleteSnack = (id) => {
+  const deleteSnack = async (id) => {
+    await deleteSnackAPI(id);
     setCompanies(companies.map(company =>
       company.id === selectedCompanyId
         ? {
@@ -104,35 +130,37 @@ function App() {
             snacks: company.snacks.filter(snack => snack.id !== id)
           }
         : company
-    ))
+    ));
   }
 
-  const decreaseStock = (id, quantity) => {
-    setCompanies(companies.map(company =>
-      company.id === userCompanyId
-        ? {
-            ...company,
-            snacks: company.snacks.map(snack =>
-              snack.id === id
-                ? { ...snack, stock: Math.max(0, snack.stock - quantity) }
-                : snack
-            )
-          }
-        : company
-    ))
-  }
-
-  const addCompany = (company) => {
-    const newCompany = {
-      id: Date.now(),
-      ...company,
-      snacks: []
+  const decreaseStock = async (id, quantity) => {
+    const snack = companies
+      .find(company => company.id === userCompanyId)
+      ?.snacks.find(s => s.id === id);
+    if (snack) {
+      const updated = await updateSnackAPI(id, {
+        ...snack,
+        stock: Math.max(0, snack.stock - quantity)
+      });
+      setCompanies(companies.map(company =>
+        company.id === userCompanyId
+          ? {
+              ...company,
+              snacks: company.snacks.map(s => s.id === id ? updated : s)
+            }
+          : company
+      ));
     }
-    setCompanies([...companies, newCompany])
   }
 
-  const deleteCompany = (id) => {
-    setCompanies(companies.filter(company => company.id !== id))
+  const addCompany = async (company) => {
+    const newCompany = await addCompanyAPI(company);
+    setCompanies([...companies, newCompany]);
+  }
+
+  const deleteCompany = async (id) => {
+    await deleteCompanyAPI(id);
+    setCompanies(companies.filter(company => company.id !== id));
   }
 
   const handleSelectCompany = (companyId) => {
@@ -173,8 +201,18 @@ function App() {
     setUserCompanyId(parseInt(companyId))
   }
 
-  const currentCompany = companies.find(c => c.id === selectedCompanyId || c.id === userCompanyId)
-  const snacksToShow = currentCompany?.snacks || []
+  const [snacksToShow, setSnacksToShow] = useState([]);
+
+  useEffect(() => {
+    const companyId = selectedCompanyId || userCompanyId;
+    if (companyId) {
+      fetchSnacks(companyId).then(setSnacksToShow);
+    } else {
+      setSnacksToShow([]);
+    }
+  }, [selectedCompanyId, userCompanyId, companies]);
+
+  const currentCompany = companies.find(c => c.id === selectedCompanyId || c.id === userCompanyId);
 
   // Determine what content to show
   let contentToShow
@@ -228,30 +266,34 @@ function App() {
           <h1>GATHER & GRAZE</h1>
         </div>
         <div className="nav-buttons">
-          <button 
-            className={`btn ${currentScreen === 'user' ? 'btn-secondary' : 'btn-primary'}`}
-            onClick={() => {
-              setCurrentScreen('user')
-              setSelectedCompanyId(null)
-              // Clear user login data to show login screen
-              localStorage.removeItem('userCompanyId')
-              localStorage.removeItem('userEmail')
-              localStorage.removeItem('userCompanyName')
-              setIsUserLoggedIn(false)
-              setUserCompanyId(null)
-            }}
-          >
-            👤 User
-          </button>
-          <button 
-            className={`btn ${currentScreen === 'admin' ? 'btn-secondary' : 'btn-primary'}`}
-            onClick={() => {
-              setCurrentScreen('admin')
-              setSelectedCompanyId(null)
-            }}
-          >
-            ⚙️ Admin
-          </button>
+          {(!isUserLoggedIn && !isAdminLoggedIn) && (
+            <>
+              <button 
+                className={`btn ${currentScreen === 'user' ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => {
+                  setCurrentScreen('user')
+                  setSelectedCompanyId(null)
+                  // Clear user login data to show login screen
+                  localStorage.removeItem('userCompanyId')
+                  localStorage.removeItem('userEmail')
+                  localStorage.removeItem('userCompanyName')
+                  setIsUserLoggedIn(false)
+                  setUserCompanyId(null)
+                }}
+              >
+                👤 User
+              </button>
+              <button 
+                className={`btn ${currentScreen === 'admin' ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => {
+                  setCurrentScreen('admin')
+                  setSelectedCompanyId(null)
+                }}
+              >
+                ⚙️ Admin
+              </button>
+            </>
+          )}
           {isAdminLoggedIn && (
             <div className="admin-status">
               <span className="admin-email">👤 {adminEmail}</span>

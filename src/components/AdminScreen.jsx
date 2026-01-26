@@ -86,7 +86,7 @@ export default function AdminScreen({ snacks, onAddSnack, onUpdateSnack, onDelet
         <button className="btn btn-primary" onClick={onBack}>
           ← Back to Companies
         </button>
-        <h2 style={{ marginTop: '15px', color: '#333' }}>🏢 {selectedCompany?.name} - Item Management</h2>
+        <h2 style={{ marginTop: '15px', color: '#fff' }}>🏢 {selectedCompany?.name} - Item Management</h2>
       </div>
 
       <div className="form-section">

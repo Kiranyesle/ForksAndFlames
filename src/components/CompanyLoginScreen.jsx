@@ -7,37 +7,43 @@ export default function CompanyLoginScreen({ companies, onLoginSuccess }) {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const DEMO_CREDENTIALS = {
-    email: 'admin@gathergraze.com',
-    password: 'admin123'
-  }
+  // ...existing code...
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError('')
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
 
     if (!selectedCompanyId) {
-      setError('Please select a company')
-      return
+      setError('Please select a company');
+      return;
     }
 
-    setIsLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
-      if (email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) {
-        // Store company selection in localStorage
-        localStorage.setItem('userCompanyId', selectedCompanyId)
-        localStorage.setItem('userEmail', email)
-        const company = companies.find(c => c.id === parseInt(selectedCompanyId))
-        localStorage.setItem('userCompanyName', company?.name || '')
-        onLoginSuccess()
+    setIsLoading(true);
+    try {
+      const res = await fetch('https://forkandflamesapi.onrender.com/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.ok) {
+        const user = await res.json();
+        if (user.companyId === parseInt(selectedCompanyId)) {
+          localStorage.setItem('userCompanyId', selectedCompanyId);
+          localStorage.setItem('userEmail', email);
+          const company = companies.find(c => c.id === parseInt(selectedCompanyId));
+          localStorage.setItem('userCompanyName', company?.name || '');
+          onLoginSuccess();
+        } else {
+          setError('User does not belong to selected company');
+        }
       } else {
-        setError('Invalid email or password. Try admin@gathergraze.com / admin123')
+        setError('Invalid email or password');
       }
-      setIsLoading(false)
-    }, 500)
-  }
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    }
+    setIsLoading(false);
+  } 
 
   return (
     <div className="company-login-container">
@@ -106,13 +112,7 @@ export default function CompanyLoginScreen({ companies, onLoginSuccess }) {
           </form>
         )}
 
-        <div className="login-footer">
-          <p className="demo-credentials">
-            <strong>Demo Credentials:</strong><br />
-            Email: admin@gathergraze.com<br />
-            Password: admin123
-          </p>
-        </div>
+        {/* Demo credentials removed */}
       </div>
     </div>
   )

@@ -6,29 +6,34 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Demo credentials - in production, this should be sent to a backend
-  const DEMO_ADMIN = {
-    email: 'admin@gathergraze.com',
-    password: 'admin123'
-  }
+  // ...existing code...
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
-
-    // Simulate API call delay
-    setTimeout(() => {
-      if (email === DEMO_ADMIN.email && password === DEMO_ADMIN.password) {
-        // Store admin token in localStorage with proper format
-        localStorage.setItem('adminToken', 'true')
-        localStorage.setItem('adminEmail', email)
-        onLoginSuccess()
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    try {
+      const res = await fetch('https://forkandflamesapi.onrender.com/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.ok) {
+        const user = await res.json();
+        if (user.role === 'admin') {
+          localStorage.setItem('adminToken', 'true');
+          localStorage.setItem('adminEmail', email);
+          onLoginSuccess();
+        } else {
+          setError('Not an admin account');
+        }
       } else {
-        setError('Invalid email or password. Try admin@gathergraze.com / admin123')
+        setError('Invalid email or password');
       }
-      setIsLoading(false)
-    }, 500)
+    } catch (err) {
+      setError('Login failed. Please try again.');
+    }
+    setIsLoading(false);
   }
 
   return (
@@ -75,13 +80,7 @@ export default function LoginScreen({ onLoginSuccess }) {
           </button>
         </form>
 
-        <div className="login-footer">
-          <p className="demo-credentials">
-            <strong>Demo Credentials:</strong><br/>
-            Email: admin@gathergraze.com<br/>
-            Password: admin123
-          </p>
-        </div>
+        {/* Demo credentials removed */}
       </div>
     </div>
   )
