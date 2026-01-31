@@ -1,0 +1,25 @@
+{
+  "companyId": "123", // string or number, optional
+  "date": "2026-01-31" // string, format: YYYY-MM-DD, optional
+}
+
+// Example API usage:
+// GET /api/purchase?companyId=123&date=2026-01-31
+// GET /api/purchase?date=2026-01-31
+// GET /api/purchase?companyId=123
+// GET /api/purchase
+
+// Response JSON (example):
+[
+  {
+    "companyId": 123,
+    "companyName": "Gather & Graze",
+    "date": "2026-01-31",
+    "quantity": 5,
+    "totalPrice": 24.95
+  },
+  // ...more purchase records
+]
+
+// Excel download endpoint:
+// GET /api/purchase/download?companyId=123&date=2026-01-31

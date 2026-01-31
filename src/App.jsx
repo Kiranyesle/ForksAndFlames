@@ -1,16 +1,18 @@
 // Snack API utility functions
 async function fetchSnacks(companyId) {
-  const res = await fetch(`${API_BASE}/companies/${companyId}`);
-  const company = await res.json();
-  return company.snacks || [];
+  console.log('Calling snack API for companyId:', companyId);
+  const res = await fetch(`${API_BASE}/snacks?companyId=${companyId}`);
+  const snacks = await res.json();
+  console.log('Snack API response:', snacks);
+  return snacks || [];
 }
 
 async function addSnackAPI(snack, companyId) {
-  // Attach company reference
-  const res = await fetch(`${API_BASE}/snacks`, {
+  // Send companyId as query parameter
+  const res = await fetch(`${API_BASE}/snacks?companyId=${companyId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...snack, company: { id: companyId } })
+    body: JSON.stringify(snack)
   });
   return res.json();
 }
@@ -51,6 +53,7 @@ async function deleteCompanyAPI(id) {
 }
 import './styles.css'
 import AdminScreen from './components/AdminScreen'
+import PurchaseDataScreen from './components/PurchaseDataScreen'
 import UserScreen from './components/UserScreen'
 import LoginScreen from './components/LoginScreen'
 import CompanyManagement from './components/CompanyManagement'
@@ -58,12 +61,14 @@ import CompanyLoginScreen from './components/CompanyLoginScreen'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('user')
+  const [adminTab, setAdminTab] = useState('manage');
   const [companies, setCompanies] = useState([])
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
   const [adminEmail, setAdminEmail] = useState('')
   const [selectedCompanyId, setSelectedCompanyId] = useState(null)
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false)
   const [userCompanyId, setUserCompanyId] = useState(null)
+  const [loader, setLoader] = useState(false);
 
   // Load companies from localStorage on mount
   useEffect(() => {
@@ -76,10 +81,17 @@ function App() {
     if (adminToken === 'true' && savedAdminEmail) {
       setIsAdminLoggedIn(true);
       setAdminEmail(savedAdminEmail);
+      // Restore selectedCompanyId for admin
+      const savedCompanyId = localStorage.getItem('selectedCompanyId');
+      if (savedCompanyId) {
+        setSelectedCompanyId(parseInt(savedCompanyId));
+      }
     } else {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('adminEmail');
       setIsAdminLoggedIn(false);
+      setSelectedCompanyId(null);
+      localStorage.removeItem('selectedCompanyId');
     }
 
     // Check if user is logged into a company
@@ -99,12 +111,29 @@ function App() {
   // Remove localStorage sync for companies
 
   const addSnack = async (snack) => {
-    const newSnack = await addSnackAPI(snack, selectedCompanyId);
-    setCompanies(companies.map(company =>
-      company.id === selectedCompanyId
-        ? { ...company, snacks: [...company.snacks, newSnack] }
-        : company
-    ));
+    const companyIdToUse = snack.companyId || selectedCompanyId;
+    console.log('Adding snack with payload:', snack, 'companyId:', companyIdToUse);
+    const newSnack = await addSnackAPI(snack, companyIdToUse);
+    console.log('New snack returned from API:', newSnack);
+    setCompanies(companies.map(company => {
+      if (company.id === companyIdToUse) {
+        // If API returns an array, use it; if object, append
+        let snacksArray = Array.isArray(newSnack) ? newSnack : [...(company.snacks || []), newSnack];
+        return { ...company, snacks: snacksArray };
+      }
+      return company;
+    }));
+    // Refresh snack and company list after adding
+    if (companyIdToUse) {
+      fetchSnacks(companyIdToUse).then(snacks => {
+        console.log('Fetched snacks after add:', snacks);
+        setSnacksToShow(snacks);
+      });
+      fetchCompanies().then(companies => {
+        console.log('Fetched companies after add:', companies);
+        setCompanies(companies);
+      });
+    }
   }
 
   const updateSnack = async (id, updatedSnack) => {
@@ -134,9 +163,9 @@ function App() {
   }
 
   const decreaseStock = async (id, quantity) => {
-    const snack = companies
-      .find(company => company.id === userCompanyId)
-      ?.snacks.find(s => s.id === id);
+    const company = companies.find(company => company.id === userCompanyId);
+    if (!company || !Array.isArray(company.snacks)) return;
+    const snack = company.snacks.find(s => s.id === id);
     if (snack) {
       const updated = await updateSnackAPI(id, {
         ...snack,
@@ -165,15 +194,18 @@ function App() {
 
   const handleSelectCompany = (companyId) => {
     setSelectedCompanyId(companyId)
+    localStorage.setItem('selectedCompanyId', companyId)
   }
 
   const handleBackToCompanies = () => {
     setSelectedCompanyId(null)
+    localStorage.removeItem('selectedCompanyId')
   }
 
   const handleAdminLogout = () => {
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminEmail')
+    localStorage.removeItem('selectedCompanyId')
     setIsAdminLoggedIn(false)
     setAdminEmail('')
     setSelectedCompanyId(null)
@@ -205,6 +237,7 @@ function App() {
 
   useEffect(() => {
     const companyId = selectedCompanyId || userCompanyId;
+    console.log('useEffect triggered. selectedCompanyId:', selectedCompanyId, 'userCompanyId:', userCompanyId);
     if (companyId) {
       fetchSnacks(companyId).then(setSnacksToShow);
     } else {
@@ -220,17 +253,48 @@ function App() {
   if (currentScreen === 'admin') {
     if (!isAdminLoggedIn) {
       contentToShow = <LoginScreen onLoginSuccess={handleAdminLoginSuccess} />
-    } else if (selectedCompanyId) {
+    } else if (isAdminLoggedIn) {
       contentToShow = (
-        <AdminScreen 
-          snacks={snacksToShow}
-          onAddSnack={addSnack}
-          onUpdateSnack={updateSnack}
-          onDeleteSnack={deleteSnack}
-          selectedCompanyId={selectedCompanyId}
-          onBack={handleBackToCompanies}
-          companies={companies}
-        />
+        <>
+          <div style={{ display: 'flex', gap: 0, margin: '24px 0 16px 0', borderBottom: '2px solid #1976d2', maxWidth: 700, marginLeft: 'auto', marginRight: 'auto' }}>
+            <button
+              className={adminTab === 'manage' ? 'btn btn-secondary' : 'btn btn-primary'}
+              style={{ borderRadius: '12px 12px 0 0', borderBottom: adminTab === 'manage' ? '2px solid #fff' : '2px solid #1976d2', fontWeight: 600, fontSize: '1.1rem', padding: '10px 32px', background: adminTab === 'manage' ? '#1976d2' : '#fff', color: adminTab === 'manage' ? '#fff' : '#1976d2', borderRight: '1px solid #1976d2', borderLeft: '1px solid #1976d2', borderTop: '1px solid #1976d2', outline: 'none', cursor: 'pointer' }}
+              onClick={() => setAdminTab('manage')}
+            >
+              🏢 Manage Company
+            </button>
+            <button
+              className={adminTab === 'purchase' ? 'btn btn-secondary' : 'btn btn-primary'}
+              style={{ borderRadius: '12px 12px 0 0', borderBottom: adminTab === 'purchase' ? '2px solid #fff' : '2px solid #1976d2', fontWeight: 600, fontSize: '1.1rem', padding: '10px 32px', background: adminTab === 'purchase' ? '#1976d2' : '#fff', color: adminTab === 'purchase' ? '#fff' : '#1976d2', borderRight: '1px solid #1976d2', borderTop: '1px solid #1976d2', outline: 'none', cursor: 'pointer' }}
+              onClick={() => setAdminTab('purchase')}
+            >
+              📊 Purchase Data
+            </button>
+          </div>
+          {adminTab === 'purchase' ? (
+            <PurchaseDataScreen />
+          ) : (
+            selectedCompanyId ? (
+              <AdminScreen
+                snacks={snacksToShow}
+                onAddSnack={addSnack}
+                onUpdateSnack={updateSnack}
+                onDeleteSnack={deleteSnack}
+                selectedCompanyId={selectedCompanyId}
+                onBack={handleBackToCompanies}
+                companies={companies}
+              />
+            ) : (
+              <CompanyManagement
+                companies={companies}
+                onAddCompany={addCompany}
+                onDeleteCompany={deleteCompany}
+                onSelectCompany={handleSelectCompany}
+              />
+            )
+          )}
+        </>
       )
     } else {
       contentToShow = (
@@ -242,8 +306,8 @@ function App() {
         />
       )
     }
-  } else {
-    // User screen
+  } else if (!isAdminLoggedIn) {
+    // Only show user login/user screen if NOT in admin context
     if (!isUserLoggedIn) {
       contentToShow = <CompanyLoginScreen companies={companies} onLoginSuccess={handleUserLoginSuccess} />
     } else {
@@ -253,6 +317,7 @@ function App() {
           onDecreaseStock={decreaseStock}
           currentCompanyName={currentCompany?.name || 'Snack Shop'}
           onLogout={isUserLoggedIn ? handleUserLogout : undefined}
+          setLoader={setLoader}
         />
       )
     }
@@ -260,6 +325,44 @@ function App() {
 
   return (
     <div className="app">
+      {loader && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(0,0,0,0.25)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#fff',
+            padding: '32px 48px',
+            borderRadius: 16,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            fontSize: 22,
+            fontWeight: 600
+          }}>
+            <span className="loader-spinner" style={{
+              width: 40,
+              height: 40,
+              border: '5px solid #1976d2',
+              borderTop: '5px solid #fff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              marginBottom: 16
+            }}></span>
+            Loading...
+          </div>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }`}</style>
+        </div>
+      )}
       <header className="header" style={{ fontFamily: 'Playfair Display, serif' }}>
         <div className="header-left">
           <img src="/logo.jpg" alt="GATHER & GRAZE Logo" className="logo" />
@@ -273,7 +376,6 @@ function App() {
                 onClick={() => {
                   setCurrentScreen('user')
                   setSelectedCompanyId(null)
-                  // Clear user login data to show login screen
                   localStorage.removeItem('userCompanyId')
                   localStorage.removeItem('userEmail')
                   localStorage.removeItem('userCompanyName')
@@ -300,6 +402,16 @@ function App() {
               <button 
                 className="btn btn-danger"
                 onClick={handleAdminLogout}
+              >
+                🚪 Logout
+              </button>
+            </div>
+          )}
+          {isUserLoggedIn && !isAdminLoggedIn && (
+            <div className="admin-status">
+              <button 
+                className="btn btn-danger"
+                onClick={handleUserLogout}
               >
                 🚪 Logout
               </button>

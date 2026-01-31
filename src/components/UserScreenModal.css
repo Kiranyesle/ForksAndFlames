@@ -1,0 +1,51 @@
+/* Modal overlay */
+.usm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal box */
+.usm-modal-box {
+  background: #fffbe6;
+  border-radius: 12px;
+  padding: 32px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  color: #2d3748;
+}
+
+.usm-modal-title {
+  margin-bottom: 16px;
+  color: #2d3748;
+}
+
+.usm-modal-text {
+  color: #2d3748;
+}
+
+.usm-modal-list {
+  margin-bottom: 16px;
+  color: #2d3748;
+  list-style: none;
+  padding-left: 0;
+}
+
+.usm-modal-item {
+  color: #2d3748;
+  margin-bottom: 4px;
+}
+
+.usm-modal-total {
+  margin-bottom: 16px;
+  color: #2d3748;
+  font-weight: bold;
+}
